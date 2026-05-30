@@ -1,18 +1,17 @@
-# ⬡ Script Runner
+# ⚡ Script Runner
 
-A lightweight web-based process manager that lets you run, monitor, stop, restart, and kill scripts from your browser — no terminal babysitting required.
+A lightweight, web-based process manager for running and monitoring Python scripts — all from your browser.
 
 ---
 
 ## Features
 
-- **Run any command** — shell scripts, Python files, binaries, one-liners
-- **Live output** — stdout and stderr streamed to the browser in real time
-- **Process controls** — Stop (graceful), Restart, and Kill (force)
-- **Status indicator** — live badge shows Running / Stopped / Killed with a pulsing dot
-- **Uptime counter** — tracks how long the current process has been running
-- **Reconnect on refresh** — if you reload the page mid-run, the UI reattaches to the live process
-- **Color-coded terminal** — stdout, stderr, system messages, and exit codes each have distinct colors
+- **Multi-script management** — add as many scripts as you need, each tracked independently
+- **Live status indicators** — pulsing green dot when running, red when stopped
+- **Full process controls** — Start, Stop, Restart, and Kill per script
+- **Live log output** — toggle an output panel to watch stdout/stderr in real time
+- **Add via UI** — click `+` to register a new script by name, path, and optional arguments
+- **Auto-refresh** — status polling every 2 seconds, no manual refresh needed
 
 ---
 
@@ -21,9 +20,7 @@ A lightweight web-based process manager that lets you run, monitor, stop, restar
 - Python 3.7+
 - Flask
 
----
-
-## Installation
+Install Flask if you don't have it:
 
 ```bash
 pip install flask
@@ -33,72 +30,57 @@ pip install flask
 
 ## Usage
 
-### Start the server
-
 ```bash
-python3 script_runner.py
+python script_runner.py
 ```
 
-Then open **http://localhost:5000** in your browser.
-
-To use a different port:
-
-```bash
-PORT=8080 python3 script_runner.py
-```
-
-### Run a script
-
-1. Type any command into the input field at the top
-2. Click **▶ Run**
-
-**Examples:**
+Then open your browser and go to:
 
 ```
-python3 my_script.py
-bash ./deploy.sh
-ping google.com
-ls -la /var/log
+http://localhost:5000
 ```
-
-### Controls
-
-| Button | Action |
-|--------|--------|
-| **▶ Run** | Launches the entered command as a subprocess |
-| **■ Stop** | Sends `SIGTERM` to the process group (graceful shutdown) |
-| **↺ Restart** | Stops the current process and relaunches the same command |
-| **✕ Kill** | Sends `SIGKILL` to the process group (immediate termination) |
-| **⌫ Clear** | Clears the terminal output display |
 
 ---
 
-## How it works
+## Adding a Script
 
-- The script is launched via `subprocess.Popen` with `shell=True`, so it runs inside a process group
-- stdout and stderr are read on background threads and pushed to a queue
-- The browser connects to `/stream` using **Server-Sent Events (SSE)** for live output
-- Stop/Kill target the entire process group (`os.killpg`), so child processes are also terminated
-- State (status, script path, start time) is held in memory — it resets when the server restarts
+1. Click the **+ Add Script** button in the top right
+2. Fill in the fields:
+   - **Name** — a label for the script (e.g. `Data Processor`)
+   - **Path** — absolute or relative path to your `.py` file (e.g. `/home/user/scripts/run.py`)
+   - **Arguments** *(optional)* — any CLI arguments (e.g. `--port 8080 --debug`)
+3. Click **Add Script** or press `Enter`
+
+---
+
+## Controls
+
+| Button | Action |
+|--------|--------|
+| ▶ **Start** | Launches the script with `python3` |
+| ■ **Stop** | Sends `SIGTERM` for a graceful shutdown (waits up to 5s, then force-kills) |
+| ↻ **Restart** | Stops the running process and immediately starts it again |
+| ✕ **Kill** | Sends `SIGKILL` — instant, forceful termination |
+| ≡ **Logs** | Toggles the live output panel (stdout + stderr) |
+| 🗑 **Remove** | Kills the process (if running) and removes it from the list |
+
+---
+
+## Notes
+
+- All scripts are run with `python3`. Shell scripts or other runtimes are not currently supported out of the box.
+- Log output is capped at 50,000 characters (oldest lines are dropped to keep memory usage low).
+- Scripts and their state are stored in memory — restarting the server clears all entries.
+- The server binds to `0.0.0.0:5000` by default, making it accessible on your local network. For local-only access, change `host="0.0.0.0"` to `host="127.0.0.1"` in the last line of `script_runner.py`.
 
 ---
 
 ## Project Structure
 
 ```
-script_runner.py   # Single-file app — server + UI in one
+script_runner.py   # Single-file app — Flask backend + HTML/CSS/JS frontend
+README.md
 ```
-
-Everything is self-contained in one file. The HTML/CSS/JS frontend is embedded as a Python string and served via Flask's `render_template_string`.
-
----
-
-## Notes
-
-- **No authentication** — this tool is intended for local or trusted-network use only. Do not expose it to the public internet.
-- **One process at a time** — only one script can run at a time. Start a new one after the current process stops.
-- **Shell expansion** — because `shell=True` is used, commands like `ls *.py` and `$HOME` work as expected.
-- Output history is kept in memory (last 200 lines) and is lost when the server restarts.
 
 ---
 
