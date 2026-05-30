@@ -1,15 +1,14 @@
-#!/usr/bin/env python3.11
+#!/usr/bin/env python3
 """
 Script Runner - A web-based script management and execution tool.
-Run with: python3.11 script_runner.py
+Run with: python script_runner.py
 Then open http://localhost:5000 in your browser.
 """
 
 import subprocess
 import threading
-import time
+import sys
 import os
-import json
 from flask import Flask, render_template_string, request, jsonify
 
 app = Flask(__name__)
@@ -525,6 +524,10 @@ HTML_TEMPLATE = """
       <label>Arguments (optional)</label>
       <input type="text" id="scriptArgs" placeholder="e.g. --port 8080 --debug" />
     </div>
+    <div class="field">
+      <label>Interpreter (optional)</label>
+      <input type="text" id="scriptInterpreter" placeholder="e.g. python3, python, bash  (default: python3)" />
+    </div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal()">Cancel</button>
       <button class="btn-confirm" onclick="addScript()">Add Script</button>
@@ -547,6 +550,7 @@ HTML_TEMPLATE = """
     document.getElementById('scriptName').value = '';
     document.getElementById('scriptPath').value = '';
     document.getElementById('scriptArgs').value = '';
+    document.getElementById('scriptInterpreter').value = '';
   }
 
   document.getElementById('modalOverlay').addEventListener('click', function(e) {
@@ -569,11 +573,12 @@ HTML_TEMPLATE = """
     const name = document.getElementById('scriptName').value.trim();
     const path = document.getElementById('scriptPath').value.trim();
     const args = document.getElementById('scriptArgs').value.trim();
+    const interpreter = document.getElementById('scriptInterpreter').value.trim();
     if (!name || !path) { showToast('Name and path are required.', 'error'); return; }
     const res = await fetch('/api/add', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ name, path, args })
+      body: JSON.stringify({ name, path, args, interpreter })
     });
     const data = await res.json();
     if (data.success) { closeModal(); showToast(`"${name}" added.`, 'success'); renderCard(data.script); }
@@ -712,6 +717,7 @@ def get_script_info(sid):
         "name": s.get("name", ""),
         "path": s.get("path", ""),
         "args": s.get("args", ""),
+        "interpreter": s.get("interpreter", sys.executable),
         "status": "running" if running else "stopped"
     }
 
@@ -725,11 +731,12 @@ def add_script():
     name = data.get("name", "").strip()
     path = data.get("path", "").strip()
     args = data.get("args", "").strip()
+    interpreter = data.get("interpreter", "").strip() or sys.executable
     if not name or not path:
         return jsonify({"success": False, "error": "Name and path required."})
     script_id_counter[0] += 1
     sid = str(script_id_counter[0])
-    scripts[sid] = {"name": name, "path": path, "args": args}
+    scripts[sid] = {"name": name, "path": path, "args": args, "interpreter": interpreter}
     logs[sid] = ""
     return jsonify({"success": True, "script": get_script_info(sid)})
 
@@ -741,25 +748,36 @@ def start_script(sid):
     if proc and proc.poll() is None:
         return jsonify({"success": False, "error": "Already running."})
     s = scripts[sid]
-    cmd = ["python3.11", s["path"]] + (s["args"].split() if s["args"] else [])
+    interpreter = s.get("interpreter") or sys.executable
+    cmd = [interpreter, s["path"]] + (s["args"].split() if s["args"] else [])
     try:
         proc = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
-            bufsize=1
+            bufsize=1,
+            cwd=os.path.dirname(os.path.abspath(s["path"])) or None
         )
         processes[sid] = proc
-        logs[sid] = ""
-        def reader():
-            for line in proc.stdout:
-                logs[sid] += line
-                if len(logs[sid]) > 50000:
-                    logs[sid] = logs[sid][-50000:]
+        logs[sid] = f"[Started] {' '.join(cmd)}\n"
+
+        def reader(p=proc, s_id=sid):
+            for line in p.stdout:
+                logs[s_id] += line
+                if len(logs[s_id]) > 50000:
+                    logs[s_id] = logs[s_id][-50000:]
+            rc = p.wait()
+            logs[s_id] += f"\n[Process exited with code {rc}]\n"
+
         threading.Thread(target=reader, daemon=True).start()
         return jsonify({"success": True, "script": get_script_info(sid)})
+    except FileNotFoundError:
+        msg = f"Interpreter '{interpreter}' not found. Check the interpreter field."
+        logs[sid] = f"[Error] {msg}\n"
+        return jsonify({"success": False, "error": msg})
     except Exception as e:
+        logs[sid] = f"[Error] {e}\n"
         return jsonify({"success": False, "error": str(e)})
 
 @app.route("/api/stop/<sid>", methods=["POST"])
