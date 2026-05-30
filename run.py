@@ -9,15 +9,39 @@ import subprocess
 import threading
 import sys
 import os
+import json
 from flask import Flask, render_template_string, request, jsonify
 
 app = Flask(__name__)
+
+SAVE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scripts.json")
 
 # Store running processes
 processes = {}
 scripts = {}
 script_id_counter = [0]
 logs = {}
+
+def save_scripts():
+    try:
+        with open(SAVE_FILE, "w") as f:
+            json.dump({"counter": script_id_counter[0], "scripts": scripts}, f, indent=2)
+    except Exception as e:
+        print(f"[Warning] Could not save scripts: {e}")
+
+def load_scripts():
+    if not os.path.exists(SAVE_FILE):
+        return
+    try:
+        with open(SAVE_FILE) as f:
+            data = json.load(f)
+        scripts.update(data.get("scripts", {}))
+        script_id_counter[0] = data.get("counter", 0)
+        for sid in scripts:
+            logs[sid] = ""
+        print(f"[Script Runner] Loaded {len(scripts)} script(s) from {SAVE_FILE}")
+    except Exception as e:
+        print(f"[Warning] Could not load scripts: {e}")
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -702,6 +726,16 @@ HTML_TEMPLATE = """
     }
   }
 
+  // Load saved scripts on page start
+  async function init() {
+    const res = await fetch('/api/status');
+    const data = await res.json();
+    for (const script of data.scripts) {
+      renderCard(script);
+    }
+  }
+
+  init();
   setInterval(pollStatus, 2000);
 </script>
 </body>
@@ -738,6 +772,7 @@ def add_script():
     sid = str(script_id_counter[0])
     scripts[sid] = {"name": name, "path": path, "args": args, "interpreter": interpreter}
     logs[sid] = ""
+    save_scripts()
     return jsonify({"success": True, "script": get_script_info(sid)})
 
 @app.route("/api/start/<sid>", methods=["POST"])
@@ -819,6 +854,7 @@ def remove_script(sid):
     processes.pop(sid, None)
     scripts.pop(sid, None)
     logs.pop(sid, None)
+    save_scripts()
     return jsonify({"success": True})
 
 @app.route("/api/logs/<sid>")
@@ -830,5 +866,6 @@ def status():
     return jsonify({"scripts": [get_script_info(sid) for sid in scripts]})
 
 if __name__ == "__main__":
+    load_scripts()
     print("Script Runner starting at http://localhost:5000")
     app.run(debug=False, host="0.0.0.0", port=5000)
