@@ -31,7 +31,7 @@ pip install flask
 ## Usage
 
 ```bash
-python script_runner.py
+python3.11 script_runner.py
 ```
 
 Then open your browser and go to:
@@ -57,7 +57,7 @@ http://localhost:5000
 
 | Button | Action |
 |--------|--------|
-| ▶ **Start** | Launches the script with `python3` |
+| ▶ **Start** | Launches the script with `python3.11` |
 | ■ **Stop** | Sends `SIGTERM` for a graceful shutdown (waits up to 5s, then force-kills) |
 | ↻ **Restart** | Stops the running process and immediately starts it again |
 | ✕ **Kill** | Sends `SIGKILL` — instant, forceful termination |
@@ -68,7 +68,7 @@ http://localhost:5000
 
 ## Notes
 
-- All scripts are run with `python3`. Shell scripts or other runtimes are not currently supported out of the box.
+- All scripts are run with `python3.11`. Shell scripts or other runtimes are not currently supported out of the box.
 - Log output is capped at 50,000 characters (oldest lines are dropped to keep memory usage low).
 - Scripts and their state are stored in memory — restarting the server clears all entries.
 - The server binds to `0.0.0.0:5000` by default, making it accessible on your local network. For local-only access, change `host="0.0.0.0"` to `host="127.0.0.1"` in the last line of `script_runner.py`.
