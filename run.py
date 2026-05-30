@@ -1,7 +1,7 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3.11
 """
 Script Runner - A web-based script management and execution tool.
-Run with: python script_runner.py
+Run with: python3.11 script_runner.py
 Then open http://localhost:5000 in your browser.
 """
 
@@ -741,7 +741,7 @@ def start_script(sid):
     if proc and proc.poll() is None:
         return jsonify({"success": False, "error": "Already running."})
     s = scripts[sid]
-    cmd = ["python3", s["path"]] + (s["args"].split() if s["args"] else [])
+    cmd = ["python3.11", s["path"]] + (s["args"].split() if s["args"] else [])
     try:
         proc = subprocess.Popen(
             cmd,
